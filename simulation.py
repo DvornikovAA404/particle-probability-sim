@@ -6,48 +6,50 @@ import numpy as np
 
 
 class MovementStrategy(ABC):
-    """Интерфейс для стратегии движения"""
-
     @abstractmethod
     def get_displacement(self, num_particles, dt=1.0):
         pass
 
 
 class NormalMovement(MovementStrategy):
-    """Обычное Броуновское движение (Гаусс)"""
+    """
+    Обычное движение.
+    """
 
     def get_displacement(self, num_particles, dt=1.0):
-        # scale=1.0 - коэффициент диффузии
-        dx = np.random.normal(loc=0.0, scale=1.0, size=num_particles) * np.sqrt(dt)
-        dy = np.random.normal(loc=0.0, scale=1.0, size=num_particles) * np.sqrt(dt)
+        scale = np.sqrt(0.5)
+        dx = np.random.normal(loc=0.0, scale=scale, size=num_particles) * np.sqrt(dt)
+        dy = np.random.normal(loc=0.0, scale=scale, size=num_particles) * np.sqrt(dt)
         return dx, dy
 
 
 class MaxwellMovement(MovementStrategy):
-    """Движение по Максвеллу"""
+    """
+    Движение по Максвеллу.
+    """
 
     def __init__(self, beta=0.5):
         self.beta = beta
 
     def get_displacement(self, num_particles, dt=1.0):
-        # Генерируем скорость как величину 3D вектора из нормальных компонент
-        # (Физическое определение распределения Максвелла)
+        # Если мы хотим сопоставимый масштаб с Normal, нужно учитывать нормировку
+        # Но у Максвелла свой физический смысл (температура).
+        # Пока оставим beta как параметр масштаба.
+
+        # Генерируем компоненты скорости
         vx = np.random.normal(0, self.beta, num_particles)
         vy = np.random.normal(0, self.beta, num_particles)
         vz = np.random.normal(0, self.beta, num_particles)
         speed = np.sqrt(vx**2 + vy**2 + vz**2)
 
-        # Направление выбираем случайно (угол от 0 до 2pi) для 2D плоскости
         angle = np.random.uniform(0, 2 * np.pi, num_particles)
 
-        dx = (
-            speed * np.cos(angle) * np.sqrt(dt)
-        )  # sqrt(dt) нужен для масштабирования шага
+        dx = speed * np.cos(angle) * np.sqrt(dt)
         dy = speed * np.sin(angle) * np.sqrt(dt)
         return dx, dy
 
 
-# --- FACTORY (Simple) ---
+# --- FACTORY ---
 
 
 class StrategyFactory:
@@ -60,9 +62,6 @@ class StrategyFactory:
             return MaxwellMovement(beta=beta)
         else:
             raise ValueError(f"Unknown movement type: {movement_type}")
-
-
-# --- CONTEXT (Simulation Manager) ---
 
 
 class SimulationEngine:
