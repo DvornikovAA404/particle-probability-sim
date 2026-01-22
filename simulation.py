@@ -4,7 +4,7 @@ import numpy as np
 
 from geometry import GeometryFactory
 
-# --- STRATEGY PATTERN ---
+# --- STRATEGY PATTERN (Движение) ---
 
 
 class MovementStrategy(ABC):
@@ -15,7 +15,7 @@ class MovementStrategy(ABC):
 
 class NormalMovement(MovementStrategy):
     """
-    Обычное движение.
+    Нормальное (Гауссовское) распределение смещений.
     """
 
     def get_displacement(self, num_particles, dt=1.0):
@@ -27,18 +27,13 @@ class NormalMovement(MovementStrategy):
 
 class MaxwellMovement(MovementStrategy):
     """
-    Движение по Максвеллу.
+    Распределение Максвелла (для скоростей молекул газа).
     """
 
     def __init__(self, beta=0.5):
         self.beta = beta
 
     def get_displacement(self, num_particles, dt=1.0):
-        # Если мы хотим сопоставимый масштаб с Normal, нужно учитывать нормировку
-        # Но у Максвелла свой физический смысл (температура).
-        # Пока оставим beta как параметр масштаба.
-
-        # Генерируем компоненты скорости
         vx = np.random.normal(0, self.beta, num_particles)
         vy = np.random.normal(0, self.beta, num_particles)
         vz = np.random.normal(0, self.beta, num_particles)
@@ -66,13 +61,16 @@ class StrategyFactory:
             raise ValueError(f"Unknown movement type: {movement_type}")
 
 
+# --- ENGINE (Контекст) ---
+
+
 class SimulationEngine:
     def __init__(
         self,
         num_trajectories=10000,
         num_steps=10000,
         movement_type="normal",
-        geometry_type="parallel",  # Добавили geometry_type
+        geometry_type="parallel",
         **kwargs,
     ):
         self.num_trajectories = num_trajectories
@@ -81,8 +79,7 @@ class SimulationEngine:
         # 1. Стратегия Движения (Физика)
         self.move_strategy = StrategyFactory.create(movement_type, **kwargs)
 
-        # 2. Стратегия Геометрии (Стены) - создаем через Фабрику
-        # Передаем kwargs дальше, чтобы стратегия могла забрать barrier_dist и hole_size
+        # 2. Стратегия Геометрии (Стены)
         self.geo_strategy = GeometryFactory.create(geometry_type, **kwargs)
 
         self.x = np.zeros(self.num_trajectories)
@@ -93,7 +90,7 @@ class SimulationEngine:
         self.history_y = []
 
     def run(self):
-        # Сохраняем начальное состояние
+        # Сохранение начального состояния
         self.history_x.append(self.x.copy())
         self.history_y.append(self.y.copy())
 
@@ -104,23 +101,21 @@ class SimulationEngine:
         )
 
         for step in range(1, self.num_steps + 1):
-            # A. Считаем "желаемое" смещение (Physics)
+            # A. Расчет смещения (Physics)
             dx, dy = self.move_strategy.get_displacement(self.num_trajectories)
 
-            # Предварительные координаты
             current_x = self.x
             current_y = self.y
 
             proposed_x = current_x + dx
             proposed_y = current_y + dy
 
-            # B. Применяем ограничения геометрии (Geometry)
-            # Вся логика коллизий и дырок теперь делегирована стратегии
+            # B. Применение геометрии (Geometry collision check)
             final_x, final_y = self.geo_strategy.apply_boundaries(
                 current_x, current_y, proposed_x, proposed_y
             )
 
-            # C. Обновляем состояние
+            # C. Обновление состояния
             self.x = final_x
             self.y = final_y
 
