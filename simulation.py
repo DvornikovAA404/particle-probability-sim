@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 
 import numpy as np
 
+from geometry import GeometryFactory
+
 # --- STRATEGY PATTERN ---
 
 
@@ -66,40 +68,64 @@ class StrategyFactory:
 
 class SimulationEngine:
     def __init__(
-        self, num_trajectories=10000, num_steps=10000, movement_type="normal", **kwargs
+        self,
+        num_trajectories=10000,
+        num_steps=10000,
+        movement_type="normal",
+        geometry_type="parallel",  # Добавили geometry_type
+        **kwargs,
     ):
         self.num_trajectories = num_trajectories
         self.num_steps = num_steps
 
-        # Используем фабрику для получения стратегии
-        self.strategy = StrategyFactory.create(movement_type, **kwargs)
+        # 1. Стратегия Движения (Физика)
+        self.move_strategy = StrategyFactory.create(movement_type, **kwargs)
 
-        # Состояние системы
+        # 2. Стратегия Геометрии (Стены) - создаем через Фабрику
+        # Передаем kwargs дальше, чтобы стратегия могла забрать barrier_dist и hole_size
+        self.geo_strategy = GeometryFactory.create(geometry_type, **kwargs)
+
         self.x = np.zeros(self.num_trajectories)
         self.y = np.zeros(self.num_trajectories)
 
-        # История (оптимизированная)
         self.history_step = 100
         self.history_x = []
         self.history_y = []
 
     def run(self):
-        print(f"Simulation started. Strategy: {self.strategy.__class__.__name__}")
-
-        # Сохраняем старт
+        # Сохраняем начальное состояние
         self.history_x.append(self.x.copy())
         self.history_y.append(self.y.copy())
 
-        for step in range(1, self.num_steps + 1):
-            # ДЕЛЕГИРУЕМ расчет смещения стратегии
-            dx, dy = self.strategy.get_displacement(self.num_trajectories)
+        print(
+            f"Simulating: {self.num_trajectories} particles, "
+            f"Movement: {self.move_strategy.__class__.__name__}, "
+            f"Geometry: {self.geo_strategy.__class__.__name__}"
+        )
 
-            # Обновляем координаты
-            self.x += dx
-            self.y += dy
+        for step in range(1, self.num_steps + 1):
+            # A. Считаем "желаемое" смещение (Physics)
+            dx, dy = self.move_strategy.get_displacement(self.num_trajectories)
+
+            # Предварительные координаты
+            current_x = self.x
+            current_y = self.y
+
+            proposed_x = current_x + dx
+            proposed_y = current_y + dy
+
+            # B. Применяем ограничения геометрии (Geometry)
+            # Вся логика коллизий и дырок теперь делегирована стратегии
+            final_x, final_y = self.geo_strategy.apply_boundaries(
+                current_x, current_y, proposed_x, proposed_y
+            )
+
+            # C. Обновляем состояние
+            self.x = final_x
+            self.y = final_y
 
             if step % self.history_step == 0:
                 self.history_x.append(self.x.copy())
                 self.history_y.append(self.y.copy())
 
-        print("Simulation finished.")
+        print("Done.")
