@@ -1,3 +1,4 @@
+import json  # <--- Для работы с конфигами
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
@@ -16,10 +17,10 @@ class ScientificApp(tk.Tk):
     def __init__(self):
         super().__init__()
 
-        self.title("Симулятор Диффузии Частиц v1.2 (Export Edition)")
+        self.title("Симулятор Диффузии Частиц v1.3 (Config Support)")
         self.geometry("1400x950")
 
-        # Переменные для хранения данных
+        # Переменные
         self.current_sim = None
         self.current_analytics_data = {}
 
@@ -27,26 +28,47 @@ class ScientificApp(tk.Tk):
         style = ttk.Style()
         style.theme_use("clam")
 
+        # --- МЕНЮ (Верхняя панель) ---
+        self.create_menu_bar()
+
         # Главный контейнер
         main_frame = ttk.Frame(self)
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        # --- 1. ЛЕВАЯ ПАНЕЛЬ (Настройки) ---
+        # 1. ЛЕВАЯ ПАНЕЛЬ (Настройки)
         self.left_panel = ttk.LabelFrame(main_frame, text="Настройки", padding=10)
         self.left_panel.pack(side=tk.LEFT, fill=tk.Y, padx=5)
         self.create_settings_widgets()
 
-        # --- 2. ПРАВАЯ ПАНЕЛЬ (Результаты + Экспорт) ---
+        # 2. ПРАВАЯ ПАНЕЛЬ (Результаты)
         self.right_panel = ttk.LabelFrame(
             main_frame, text="Результаты и Экспорт", padding=10
         )
         self.right_panel.pack(side=tk.RIGHT, fill=tk.Y, padx=5)
-        self.create_results_and_export_widgets()  # <-- Кнопки теперь здесь
+        self.create_results_and_export_widgets()
 
-        # --- 3. ЦЕНТРАЛЬНАЯ ПАНЕЛЬ (Визуализация) ---
+        # 3. ЦЕНТРАЛЬНАЯ ПАНЕЛЬ (Графики)
         self.center_panel = ttk.LabelFrame(main_frame, text="Графики", padding=10)
         self.center_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
         self.create_plot_area()
+
+    def create_menu_bar(self):
+        """Создает верхнее меню Файл"""
+        menubar = tk.Menu(self)
+
+        # Меню "Файл"
+        file_menu = tk.Menu(menubar, tearoff=0)
+        file_menu.add_command(
+            label="📂 Загрузить настройки (JSON)...", command=self.load_config
+        )
+        file_menu.add_command(
+            label="💾 Сохранить настройки (JSON)...", command=self.save_config
+        )
+        file_menu.add_separator()
+        file_menu.add_command(label="Выход", command=self.quit)
+
+        menubar.add_cascade(label="Файл", menu=file_menu)
+        self.config(menu=menubar)
 
     def create_settings_widgets(self):
         def add_param(label_text, default_val, row):
@@ -88,8 +110,6 @@ class ScientificApp(tk.Tk):
         self.btn_run.grid(row=6, column=0, columnspan=2, pady=20, sticky="ew")
 
     def create_results_and_export_widgets(self):
-        """Создает поле с цифрами И кнопки экспорта"""
-        # Текстовое поле
         self.txt_results = tk.Text(
             self.right_panel,
             width=35,
@@ -104,10 +124,8 @@ class ScientificApp(tk.Tk):
         )
         btn_copy.pack(fill=tk.X, pady=5)
 
-        # Разделитель
         ttk.Separator(self.right_panel, orient="horizontal").pack(fill="x", pady=15)
 
-        # Блок экспорта
         lbl_export = ttk.Label(
             self.right_panel,
             text="Сохранить отдельные графики:",
@@ -142,13 +160,69 @@ class ScientificApp(tk.Tk):
     def create_plot_area(self):
         self.fig = plt.figure(figsize=(9, 9))
         self.canvas = FigureCanvasTkAgg(self.fig, master=self.center_panel)
-
-        # Стандартный тулбар (лупа, дискета для ВСЕГО окна)
         toolbar = NavigationToolbar2Tk(self.canvas, self.center_panel)
         toolbar.update()
-
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
+    # --- ЛОГИКА КОНФИГУРАЦИИ (JSON) ---
+    def save_config(self):
+        """Сохраняет текущие значения полей в JSON"""
+        config = {
+            "particles": self.inp_particles.get(),
+            "steps": self.inp_steps.get(),
+            "barrier_dist": self.inp_barrier.get(),
+            "hole_size": self.inp_hole.get(),
+            "geometry": self.combo_geo.get(),
+            "movement": self.combo_move.get(),
+        }
+
+        filename = filedialog.asksaveasfilename(
+            defaultextension=".json", filetypes=[("JSON Config", "*.json")]
+        )
+        if filename:
+            try:
+                with open(filename, "w", encoding="utf-8") as f:
+                    json.dump(config, f, indent=4)
+                messagebox.showinfo("Успех", "Настройки сохранены!")
+            except Exception as e:
+                messagebox.showerror("Ошибка", f"Не удалось сохранить:\n{e}")
+
+    def load_config(self):
+        """Загружает настройки из JSON и обновляет поля"""
+        filename = filedialog.askopenfilename(filetypes=[("JSON Config", "*.json")])
+        if filename:
+            try:
+                with open(filename, "r", encoding="utf-8") as f:
+                    config = json.load(f)
+
+                # Обновляем поля (удаляем старое -> вставляем новое)
+                if "particles" in config:
+                    self.inp_particles.delete(0, tk.END)
+                    self.inp_particles.insert(0, config["particles"])
+
+                if "steps" in config:
+                    self.inp_steps.delete(0, tk.END)
+                    self.inp_steps.insert(0, config["steps"])
+
+                if "barrier_dist" in config:
+                    self.inp_barrier.delete(0, tk.END)
+                    self.inp_barrier.insert(0, config["barrier_dist"])
+
+                if "hole_size" in config:
+                    self.inp_hole.delete(0, tk.END)
+                    self.inp_hole.insert(0, config["hole_size"])
+
+                if "geometry" in config:
+                    self.combo_geo.set(config["geometry"])
+
+                if "movement" in config:
+                    self.combo_move.set(config["movement"])
+
+                messagebox.showinfo("Успех", "Настройки загружены!")
+            except Exception as e:
+                messagebox.showerror("Ошибка", f"Неверный файл конфигурации:\n{e}")
+
+    # --- ЛОГИКА СИМУЛЯЦИИ И ЭКСПОРТА (без изменений) ---
     def log_result(self, text):
         self.txt_results.config(state="normal")
         self.txt_results.insert(tk.END, text + "\n")
@@ -161,7 +235,6 @@ class ScientificApp(tk.Tk):
         messagebox.showinfo("Инфо", "Скопировано!")
 
     def _enable_export_buttons(self):
-        """Включает кнопки после завершения расчета"""
         self.btn_save_map.config(state="normal")
         self.btn_save_diff.config(state="normal")
         self.btn_save_conc.config(state="normal")
@@ -214,20 +287,16 @@ class ScientificApp(tk.Tk):
             self.log_result(f"Tortuosity (τ): {tortuosity:.4f}")
             self.log_result(f"D_eff slope: {slope:.4f}")
 
-            # Включаем кнопки экспорта
             self._enable_export_buttons()
 
-            # Отрисовка превью
             self.fig.clear()
 
-            # 1. Карта
             ax1 = self.fig.add_subplot(2, 2, 1)
             limit = SimulationPlotter._get_round_limit(
                 max(np.max(np.abs(sim.x)), 10), step=20
             )
             if hasattr(sim, "geo_strategy"):
                 sim.geo_strategy.draw(ax1, (-limit, limit), (-limit, limit))
-
             colors = plt.cm.rainbow(np.linspace(0, 1, 50))
             hx, hy = np.array(sim.history_x), np.array(sim.history_y)
             for i in range(min(50, n_part)):
@@ -237,18 +306,15 @@ class ScientificApp(tk.Tk):
             ax1.set_ylim(-limit, limit)
             ax1.set_aspect("equal")
 
-            # 2. Диффузия
             ax2 = self.fig.add_subplot(2, 2, 2)
             X, Y = np.array(sim.history_x), np.array(sim.history_y)
-            R2_arr = (X - X[0]) ** 2 + (Y - Y[0]) ** 2
-            mean_r2 = np.mean(R2_arr, axis=1)
+            mean_r2 = np.mean((X - X[0]) ** 2 + (Y - Y[0]) ** 2, axis=1)
             steps = np.arange(len(mean_r2)) * sim.history_step
             ax2.plot(steps, mean_r2, "b-", label="Sim")
             ax2.plot(steps, steps, "k--", alpha=0.5, label="Theory")
             ax2.set_title("MSD")
             ax2.legend()
 
-            # 3. Концентрация
             ax3 = self.fig.add_subplot(2, 1, 2)
             ax3.plot(r_centers, density, "o-", color="purple", lw=2)
             ax3.fill_between(r_centers, density, alpha=0.3, color="purple")
@@ -261,7 +327,6 @@ class ScientificApp(tk.Tk):
         except Exception as e:
             messagebox.showerror("Ошибка", str(e))
 
-    # --- ЭКСПОРТ (ЛОГИКА) ---
     def _save_plot_helper(self, plot_func, default_name):
         filename = filedialog.asksaveasfilename(
             defaultextension=".pdf",
@@ -270,7 +335,6 @@ class ScientificApp(tk.Tk):
         )
         if not filename:
             return
-
         temp_fig = plt.figure(figsize=(8, 6))
         ax = temp_fig.add_subplot(111)
         plot_func(ax)
@@ -290,7 +354,6 @@ class ScientificApp(tk.Tk):
             )
             if hasattr(sim, "geo_strategy"):
                 sim.geo_strategy.draw(ax, (-limit, limit), (-limit, limit))
-
             colors = plt.cm.rainbow(np.linspace(0, 1, 100))
             hx, hy = np.array(sim.history_x), np.array(sim.history_y)
             for i in range(min(100, sim.num_trajectories)):
